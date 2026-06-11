@@ -13,13 +13,12 @@
     <PackageId>MSDF-Sharp.Extensions</PackageId>
     <Version>1.0.2</Version>
     <Authors>ExtraBinoss</Authors>
-    <Description>Extensions for FreeType and SkiaSharp integration for MSDF-Sharp.</Description>
+    <Description>Extensions for FreeType integration for MSDF-Sharp.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/ExtraBinoss/MSDFGen-Sharp</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="3.116.1" />
     <PackageReference Include="FreeTypeSharp" Version="3.0.1" />
   </ItemGroup>
 

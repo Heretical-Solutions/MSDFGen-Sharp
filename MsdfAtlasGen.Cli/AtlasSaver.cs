@@ -1,14 +1,11 @@
 using System;
 using System.IO;
-using SkiaSharp;
 using Msdfgen;
+using Msdfgen.Extensions;
 using System.Threading.Tasks;
 
 namespace MsdfAtlasGen.Cli
 {
-    /// <summary>
-    /// Saves atlas bitmaps to image files.
-    /// </summary>
     public static class AtlasSaver
     {
         public static void SaveAtlas(Bitmap<float> bitmap, string filename)
@@ -23,64 +20,53 @@ namespace MsdfAtlasGen.Cli
             int height = bitmap.Height;
             int channels = bitmap.Channels;
             var msdfPixels = bitmap.Pixels;
+            var rgba = new byte[width * height * 4];
 
-            using var skBitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-
-            unsafe
+            Parallel.For(0, height, y =>
             {
-                byte* dstPixels = (byte*)skBitmap.GetPixels().ToPointer();
-                int dstStride = skBitmap.RowBytes;
+                int srcY = height - 1 - y;
+                int srcRowOffset = channels * (width * srcY);
+                int dstRow = y * width * 4;
 
-                Parallel.For(0, height, y =>
+                if (channels == 1)
                 {
-                    int srcY = height - 1 - y;
-                    int srcRowOffset = channels * (width * srcY);
-                    byte* dstRow = dstPixels + y * dstStride;
+                    for (int x = 0; x < width; x++)
+                    {
+                        byte b = Clamp(msdfPixels[srcRowOffset + x] * 255.0f);
+                        int i = dstRow + x * 4;
+                        rgba[i] = b;
+                        rgba[i + 1] = b;
+                        rgba[i + 2] = b;
+                        rgba[i + 3] = 255;
+                    }
+                }
+                else if (channels == 3)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        int srcOffset = srcRowOffset + (x * 3);
+                        int i = dstRow + x * 4;
+                        rgba[i] = Clamp(msdfPixels[srcOffset] * 255.0f);
+                        rgba[i + 1] = Clamp(msdfPixels[srcOffset + 1] * 255.0f);
+                        rgba[i + 2] = Clamp(msdfPixels[srcOffset + 2] * 255.0f);
+                        rgba[i + 3] = 255;
+                    }
+                }
+                else if (channels == 4)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        int srcOffset = srcRowOffset + (x * 4);
+                        int i = dstRow + x * 4;
+                        rgba[i] = Clamp(msdfPixels[srcOffset] * 255.0f);
+                        rgba[i + 1] = Clamp(msdfPixels[srcOffset + 1] * 255.0f);
+                        rgba[i + 2] = Clamp(msdfPixels[srcOffset + 2] * 255.0f);
+                        rgba[i + 3] = Clamp(msdfPixels[srcOffset + 3] * 255.0f);
+                    }
+                }
+            });
 
-                    if (channels == 1)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
-                            float v = msdfPixels[srcRowOffset + x];
-                            byte b = Clamp(v * 255.0f);
-                            int dstOffset = x * 4;
-                            dstRow[dstOffset] = b;
-                            dstRow[dstOffset + 1] = b;
-                            dstRow[dstOffset + 2] = b;
-                            dstRow[dstOffset + 3] = 255;
-                        }
-                    }
-                    else if (channels == 3)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
-                            int srcOffset = srcRowOffset + (x * 3);
-                            int dstOffset = x * 4;
-                            dstRow[dstOffset] = Clamp(msdfPixels[srcOffset] * 255.0f);
-                            dstRow[dstOffset + 1] = Clamp(msdfPixels[srcOffset + 1] * 255.0f);
-                            dstRow[dstOffset + 2] = Clamp(msdfPixels[srcOffset + 2] * 255.0f);
-                            dstRow[dstOffset + 3] = 255;
-                        }
-                    }
-                    else if (channels == 4)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
-                            int srcOffset = srcRowOffset + (x * 4);
-                            int dstOffset = x * 4;
-                            dstRow[dstOffset] = Clamp(msdfPixels[srcOffset] * 255.0f);
-                            dstRow[dstOffset + 1] = Clamp(msdfPixels[srcOffset + 1] * 255.0f);
-                            dstRow[dstOffset + 2] = Clamp(msdfPixels[srcOffset + 2] * 255.0f);
-                            dstRow[dstOffset + 3] = Clamp(msdfPixels[srcOffset + 3] * 255.0f);
-                        }
-                    }
-                });
-            }
-
-            using var image = SKImage.FromBitmap(skBitmap);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 80);
-            using var stream = File.OpenWrite(filename);
-            data.SaveTo(stream);
+            PngEncoder.WritePng(rgba, width, height, filename);
         }
 
         private static byte Clamp(float v)
