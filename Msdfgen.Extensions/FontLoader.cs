@@ -258,12 +258,12 @@ namespace Msdfgen.Extensions
 
             FT_FaceRec_* face = font.Face;
             uint glyphIndex;
-            ulong charCode = FT_Get_First_Char(face, &glyphIndex);
+            ulong charCode = FT_Get_First_Char(face, &glyphIndex).ToUInt64();
 
             while (glyphIndex != 0)
             {
                 codepoints.Add((uint)charCode);
-                charCode = FT_Get_Next_Char(face, checked((UIntPtr)charCode), &glyphIndex);
+                charCode = FT_Get_Next_Char(face, checked((UIntPtr)charCode), &glyphIndex).ToUInt64();
             }
 
             return true;

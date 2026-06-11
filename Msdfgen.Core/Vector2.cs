@@ -246,7 +246,10 @@ namespace Msdfgen
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(X, Y);
+            int hash = 17;
+            hash = hash * 31 + X.GetHashCode();
+            hash = hash * 31 + Y.GetHashCode();
+            return hash;
         }
     }
 }
