@@ -1,6 +1,5 @@
 using System;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using Msdfgen;
 
 namespace Msdfgen.Extensions
@@ -9,55 +8,61 @@ namespace Msdfgen.Extensions
     {
         public static void Save(Bitmap<float> bitmap, string filename)
         {
-            // Determine format from filename or assume PNG? User said deduce from extension.
-            // ImageSharp handles deduction.
-            
-            using (var image = new Image<Rgba32>(bitmap.Width, bitmap.Height))
+            using var skBitmap = new SKBitmap(bitmap.Width, bitmap.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+
+            unsafe
             {
+                byte* dst = (byte*)skBitmap.GetPixels().ToPointer();
+                int dstStride = skBitmap.RowBytes;
+
                 for (int y = 0; y < bitmap.Height; y++)
                 {
-                    for (int x = 0; x < bitmap.Width; x++)
+                    int srcY = bitmap.Height - 1 - y;
+                    byte* row = dst + y * dstStride;
+
+                    if (bitmap.Channels == 1)
                     {
-                        // Bitmap<float> is linear float [0..1] (usually).
-                        // Need to clamp and convert to byte.
-                        // Assuming 3 channels for MSDF, 1 for SDF.
-                        
-                        // We need to flip Y for image output? 
-                        // MSDFGen standard: Origin bottom-left? 
-                        // ImageSharp: Origin top-left.
-                        // So usually we write buffer[x, height-1-y] to image[x, y] to correct orientation?
-                        // Let's assume standard behavior:
-                        
-                        int srcY = bitmap.Height - 1 - y; 
-                        
-                        if (bitmap.Channels == 1)
+                        for (int x = 0; x < bitmap.Width; x++)
                         {
-                            float val = bitmap[x, srcY, 0];
-                            byte v = ClampPositive(val * 255.0f);
-                            image[x, y] = new Rgba32(v, v, v, 255);
+                            byte v = ClampPositive(bitmap[x, srcY, 0] * 255.0f);
+                            int dstOffset = x * 4;
+                            row[dstOffset] = v;
+                            row[dstOffset + 1] = v;
+                            row[dstOffset + 2] = v;
+                            row[dstOffset + 3] = 255;
                         }
-                        else if (bitmap.Channels == 3)
+                    }
+                    else if (bitmap.Channels == 3)
+                    {
+                        for (int x = 0; x < bitmap.Width; x++)
                         {
-                            byte rv = ClampPositive(bitmap[x, srcY, 0] * 255.0f);
-                            byte gv = ClampPositive(bitmap[x, srcY, 1] * 255.0f);
-                            byte bv = ClampPositive(bitmap[x, srcY, 2] * 255.0f);
-                            image[x, y] = new Rgba32(rv, gv, bv, 255);
+                            int dstOffset = x * 4;
+                            row[dstOffset] = ClampPositive(bitmap[x, srcY, 0] * 255.0f);
+                            row[dstOffset + 1] = ClampPositive(bitmap[x, srcY, 1] * 255.0f);
+                            row[dstOffset + 2] = ClampPositive(bitmap[x, srcY, 2] * 255.0f);
+                            row[dstOffset + 3] = 255;
                         }
-                         else if (bitmap.Channels == 4)
+                    }
+                    else if (bitmap.Channels == 4)
+                    {
+                        for (int x = 0; x < bitmap.Width; x++)
                         {
-                            byte rv = ClampPositive(bitmap[x, srcY, 0] * 255.0f);
-                            byte gv = ClampPositive(bitmap[x, srcY, 1] * 255.0f);
-                            byte bv = ClampPositive(bitmap[x, srcY, 2] * 255.0f);
-                            byte av = ClampPositive(bitmap[x, srcY, 3] * 255.0f);
-                            image[x, y] = new Rgba32(rv, gv, bv, av);
+                            int dstOffset = x * 4;
+                            row[dstOffset] = ClampPositive(bitmap[x, srcY, 0] * 255.0f);
+                            row[dstOffset + 1] = ClampPositive(bitmap[x, srcY, 1] * 255.0f);
+                            row[dstOffset + 2] = ClampPositive(bitmap[x, srcY, 2] * 255.0f);
+                            row[dstOffset + 3] = ClampPositive(bitmap[x, srcY, 3] * 255.0f);
                         }
                     }
                 }
-                
-                image.Save(filename);
             }
+
+            using var image = SKImage.FromBitmap(skBitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            using var stream = System.IO.File.OpenWrite(filename);
+            data.SaveTo(stream);
         }
-        
+
         private static byte ClampPositive(float v)
         {
             if (v < 0) return 0;
